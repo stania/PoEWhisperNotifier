@@ -199,21 +199,34 @@ namespace PoEWhisperNotifier {
 			return Res;
 		}
 
-		private void RunReadLoop() {
+		private void RunReadLoop()
+		{
 			var Reader = new StreamReader(_LogStream);
-			while(IsMonitoring) {
-				if(_LogStream.Length == _LogStream.Position) {
+			var oldPos = 0L;
+			while (IsMonitoring) {
+				if (_LogStream.Position != oldPos) {
+					Debug.WriteLine("len: " + _LogStream.Length + ", pos: " + _LogStream.Position);
+					oldPos = _LogStream.Position;
+				}
+				var count = 0;
+				while (_LogStream.Position != _LogStream.Length || Reader.Peek() != -1) {
+					string Line = Reader.ReadLine();
+					var sw = Stopwatch.StartNew();
+					Action<MessageData> Ev = null;
+					if (TryParseChat(Line, out MessageData Data) || TryParseDisconnect(Line, out Data)) {
+						Debug.WriteLine("invoke: " + Line);
+						Ev = MessageReceived;
+						Ev?.Invoke(Data);
+					}
+					else {
+						Debug.WriteLine("line: " + Line);
+					}
+					sw.Stop();
+					count++;
+				}
+				if (count == 0) {
 					Thread.Sleep(250);
-					continue;
 				}
-				string Line = Reader.ReadLine();
-				var sw = Stopwatch.StartNew();
-				Action<MessageData> Ev = null;
-				if (TryParseChat(Line, out MessageData Data) || TryParseDisconnect(Line, out Data)) {
-					Ev = MessageReceived;
-					Ev?.Invoke(Data);
-				}
-				sw.Stop();
 				//Debug.WriteLine("Elapsed: " + sw.Elapsed.TotalMilliseconds + " milliseconds.");
 			}
 		}
